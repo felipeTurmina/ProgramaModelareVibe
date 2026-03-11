@@ -9,7 +9,7 @@
  *   2. Rendering (SceneManager, CameraManager) — dependem de DOM
  *   3. Managers (Material, Geometry, Animation) — dependem de SceneManager
  *   4. Editor (Selection, Project) — dependem de todos acima
- *   5. UI (Toast, Panels, List) — dependem de tudo
+ *   5. UI (Toast, PropertiesPanel, Panels, List) — dependem de tudo  ← [PATCH]
  *   6. Start loop
  */
 const App = (function () {
@@ -44,6 +44,7 @@ const App = (function () {
 
       // ── 5. UI ────────────────────────────────────────────────────────
       ToastManager.init();
+      PropertiesPanel.init();   // [PATCH] painel de propriedades completo
       _bindUIEvents();
       _renderInitialUI();
       console.log('[App] UI: OK');
@@ -202,8 +203,6 @@ const App = (function () {
    * durante período de migração incremental
    */
   function _exposeLegacyGlobals() {
-    // Durante a migração, permite que código legado em main.js
-    // acesse os novos managers através de aliases globais
     window._App = {
       EventBus: EventBus,
       StateManager: StateManager,
@@ -218,6 +217,7 @@ const App = (function () {
       MathUtils: MathUtils,
       MaterialLibrary: MaterialLibrary,
       ToastManager: ToastManager,
+      PropertiesPanel: PropertiesPanel,  // [PATCH] exposto para debug
     };
 
     // Performance stats (desenvolvimento)

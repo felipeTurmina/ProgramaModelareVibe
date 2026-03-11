@@ -9,6 +9,11 @@
  *   - buildMod() → dispatcher para todos os tipos de módulos
  *
  * Usa MaterialCache e GeometryCache para performance.
+ *
+ * [PATCH v2] Adicionados:
+ *   - _resolveShelfPositions()  → resolve prateleiras (custom ou automático)
+ *   - _resolveDividerPositions() → resolve divisórias custom
+ *   - _applyInternals()         → helper unificado para builders
  */
 const ModuleBuilder = (function () {
   'use strict';
@@ -165,6 +170,87 @@ const ModuleBuilder = (function () {
     });
   }
 
+  // ─── [PATCH] Helpers de internos paramétricos ─────────────────────────
+
+  /**
+   * Resolve posições finais de prateleiras.
+   * Prioridade: customShelves > distribuição automática por `shelves`
+   *
+   * @param {Object} p    - params do módulo
+   * @param {number} yMin - Y mínimo (normalmente T)
+   * @param {number} yMax - Y máximo (normalmente H - T)
+   * @returns {number[]}  - array de posições Y absolutas
+   */
+  function _resolveShelfPositions(p, yMin, yMax) {
+    if (p.customShelves && p.customShelves.length > 0) {
+      return p.customShelves.map(function (y) {
+        return Math.max(yMin + 10, Math.min(yMax - 10, y));
+      });
+    }
+    var count = p.shelves || 0;
+    if (count <= 0) return [];
+    return MathUtils.distributePositions(count, yMin, yMax).map(Math.round);
+  }
+
+  /**
+   * Resolve posições finais de divisórias.
+   * Prioridade: customDividers > nenhuma
+   *
+   * @param {Object} p     - params do módulo
+   * @param {number} xMin  - X mínimo (normalmente T)
+   * @param {number} xMax  - X máximo (normalmente iW - T)
+   * @returns {number[]}
+   */
+  function _resolveDividerPositions(p, xMin, xMax) {
+    if (p.customDividers && p.customDividers.length > 0) {
+      return p.customDividers.map(function (x) {
+        return Math.max(xMin + 10, Math.min(xMax - 10, x));
+      });
+    }
+    return [];
+  }
+
+  /**
+   * Aplica prateleiras e divisórias a um módulo de forma unificada.
+   * Use este helper em cada builder (Cabinet, Torre, Balcao, Shelf, etc.)
+   * no lugar dos blocos manuais de prateleiras.
+   *
+   * @param {THREE.Group}  g    - grupo do módulo
+   * @param {Function}     ap   - addPiece bound ao grupo
+   * @param {Object}       p    - params do módulo
+   * @param {number}       T    - espessura do painel
+   * @param {number}       iW   - largura interna
+   * @param {number}       H    - altura total
+   * @param {number}       Dp   - profundidade
+   * @param {number}       bk   - espessura do fundo traseiro (0 se não houver)
+   */
+  function _applyInternals(g, ap, p, T, iW, H, Dp, bk) {
+    var shelfDepth = Dp - (bk || 0) - 2;
+
+    // ── Prateleiras ──────────────────────────────────────────────────
+    var shelfPositions = _resolveShelfPositions(p, T, H - T);
+
+    shelfPositions.forEach(function (sy, i) {
+      ap('Prateleira ' + (i + 1), iW, T, shelfDepth, 0, sy, bk ? bk / 2 + 1 : 0);
+    });
+
+    // ── Divisórias verticais ─────────────────────────────────────────
+    var divPositions = _resolveDividerPositions(p, 0, iW);
+
+    if (divPositions.length > 0) {
+      buildDividers(
+        g, ap,
+        divPositions,       // posições X a partir da borda esq. interna
+        iW, H - T * 2,     // largura e altura internas
+        T,                  // espessura
+        Dp - (bk || 0),    // profundidade descontando fundo
+        bk || 0,            // fundo traseiro
+        T,                  // yBase
+        shelfPositions      // quebra divisórias nas prateleiras
+      );
+    }
+  }
+
   // ─── Dispatcher ───────────────────────────────────────────────────────
 
   /**
@@ -259,15 +345,19 @@ const ModuleBuilder = (function () {
   }
 
   return {
-    mkP: mkP,
-    regPiece: regPiece,
-    addPiece: addPiece,
-    buildTop: buildTop,
-    buildDividers: buildDividers,
-    buildMod: buildMod,
-    applyDefaults: applyDefaults,
+    mkP:              mkP,
+    regPiece:         regPiece,
+    addPiece:         addPiece,
+    buildTop:         buildTop,
+    buildDividers:    buildDividers,
+    buildMod:         buildMod,
+    applyDefaults:    applyDefaults,
     createModuleGroup: createModuleGroup,
-    getMat: getMat,
-    getEdgeMat: getEdgeMat,
+    getMat:           getMat,
+    getEdgeMat:       getEdgeMat,
+    // ── [PATCH] novos helpers ────────────────────────────────────────
+    resolveShelfPositions:    _resolveShelfPositions,
+    resolveDividerPositions:  _resolveDividerPositions,
+    applyInternals:           _applyInternals,
   };
 }());
